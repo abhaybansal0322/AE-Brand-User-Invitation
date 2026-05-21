@@ -3,6 +3,7 @@
 !.env.example
 
 bin/
+.cache/
 coverage.out
 dist/
 tmp/
