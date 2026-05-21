@@ -1,0 +1,322 @@
+openapi: 3.0.3
+info:
+  title: AE Brand User Invitation System
+  version: 1.0.0
+  description: Brand user invitation and self-service onboarding APIs.
+servers:
+  - url: http://localhost:8080
+security:
+  - ActorHeaders: []
+paths:
+  /healthz:
+    get:
+      summary: Health check
+      security: []
+      responses:
+        "200":
+          description: Service is healthy
+  /readyz:
+    get:
+      summary: Readiness check
+      security: []
+      responses:
+        "200":
+          description: Service is ready
+  /api/v1/account/{account_id}/users:
+    post:
+      summary: Create a brand user and add to account
+      parameters:
+        - $ref: "#/components/parameters/AccountID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBrandUserRequest"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateBrandUserResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    get:
+      summary: Get users of account
+      parameters:
+        - $ref: "#/components/parameters/AccountID"
+      responses:
+        "200":
+          description: Account users
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [users]
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AccountUser"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/api/v1/account/{account_id}/users:batch":
+    post:
+      summary: Update personas or remove users from an account
+      parameters:
+        - $ref: "#/components/parameters/AccountID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUsersOrAccountRequest"
+      responses:
+        "200":
+          description: Operation results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateUsersOrAccountResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/v1/account/{account_id}/audit:
+    get:
+      summary: Query account audit trail
+      parameters:
+        - $ref: "#/components/parameters/AccountID"
+        - name: actor_id
+          in: query
+          schema:
+            type: string
+        - name: target_user_id
+          in: query
+          schema:
+            type: string
+        - name: operation
+          in: query
+          schema:
+            type: string
+            enum: [CREATE, UPDATE_PERSONAS, REMOVE]
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: Audit entries
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [audit]
+                properties:
+                  audit:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AuditEntry"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+components:
+  securitySchemes:
+    ActorHeaders:
+      type: apiKey
+      in: header
+      name: X-Actor-Personas
+      description: Gateway-injected actor personas. Must include super_admin.
+  parameters:
+    AccountID:
+      name: account_id
+      in: path
+      required: true
+      schema:
+        type: string
+      example: ACC123
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: Actor is not a super admin
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Conflict:
+      description: User already exists
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unavailable:
+      description: Dependency unavailable
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+  schemas:
+    CreateBrandUserRequest:
+      type: object
+      required: [email, name, mobile, personas]
+      properties:
+        request_context:
+          type: object
+          additionalProperties: true
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        mobile:
+          type: string
+        personas:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            example: ads_admin
+    CreateBrandUserResponse:
+      type: object
+      required: [user_id, message]
+      properties:
+        user_id:
+          type: string
+        message:
+          type: string
+    UpdateUsersOrAccountRequest:
+      type: object
+      required: [user_operations]
+      properties:
+        request_context:
+          type: object
+          additionalProperties: true
+        user_operations:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/UserOperation"
+    UserOperation:
+      type: object
+      required: [operation, user_id]
+      properties:
+        operation:
+          type: string
+          enum: [UPDATE_PERSONAS, REMOVE]
+        user_id:
+          type: string
+        user_pool:
+          type: string
+          default: USER_POOL_BRAND
+        personas:
+          type: array
+          items:
+            type: string
+    UpdateUsersOrAccountResponse:
+      type: object
+      required: [results]
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/OperationResult"
+    OperationResult:
+      type: object
+      required: [user_id, success, message]
+      properties:
+        user_id:
+          type: string
+        success:
+          type: boolean
+        message:
+          type: string
+    AccountUser:
+      type: object
+      required: [account_id, user_id, user_pool, personas]
+      properties:
+        account_id:
+          type: string
+        user_id:
+          type: string
+        user_pool:
+          type: string
+        personas:
+          type: array
+          items:
+            type: string
+        user_details:
+          $ref: "#/components/schemas/UserDetails"
+    UserDetails:
+      type: object
+      properties:
+        user_id:
+          type: string
+        user_pool:
+          type: string
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        mobile:
+          type: string
+    AuditEntry:
+      type: object
+      properties:
+        id:
+          type: string
+        account_id:
+          type: string
+        actor_id:
+          type: string
+        actor_email:
+          type: string
+        target_user_id:
+          type: string
+        target_email:
+          type: string
+        operation:
+          type: string
+          enum: [CREATE, UPDATE_PERSONAS, REMOVE]
+        old_personas:
+          type: array
+          items:
+            type: string
+        new_personas:
+          type: array
+          items:
+            type: string
+        request_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string

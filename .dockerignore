@@ -1,0 +1,7 @@
+.git
+.cache
+data/*.json
+coverage.out
+dist
+tmp
+*.log
