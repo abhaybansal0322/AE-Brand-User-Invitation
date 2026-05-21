@@ -42,6 +42,31 @@ func TestCreateBrandUserEndpoint(t *testing.T) {
 	}
 }
 
+func TestCreateBrandUserEndpointUnescapesAccountID(t *testing.T) {
+	handler, backingStore := newHTTPTestHandler(t)
+	req := jsonRequest(t, http.MethodPost, "/api/v1/account/SWIGGY_IN%23IM%23ACC123/users", map[string]any{
+		"email":    "encoded@example.com",
+		"name":     "Encoded Account",
+		"mobile":   "+919876543210",
+		"personas": []string{"ads_admin"},
+	})
+	addSuperAdminHeaders(req)
+
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rr.Code, rr.Body.String())
+	}
+	users, err := backingStore.ListAccountUsers(context.Background(), "SWIGGY_IN#IM#ACC123")
+	if err != nil {
+		t.Fatalf("list account users: %v", err)
+	}
+	if len(users) != 1 {
+		t.Fatalf("expected user under decoded account id, got %#v", users)
+	}
+}
+
 func TestCreateBrandUserEndpointRequiresSuperAdmin(t *testing.T) {
 	handler, _ := newHTTPTestHandler(t)
 	req := jsonRequest(t, http.MethodPost, "/api/v1/account/ACC123/users", map[string]any{
@@ -122,7 +147,6 @@ func TestAuditEndpointFiltersByActor(t *testing.T) {
 		"personas": []string{"ads_admin"},
 	})
 	addSuperAdminHeaders(create)
-	httptest.NewRecorder().Result()
 	rrCreate := httptest.NewRecorder()
 	handler.ServeHTTP(rrCreate, create)
 	if rrCreate.Code != http.StatusCreated {
